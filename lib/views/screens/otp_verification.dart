@@ -138,7 +138,6 @@ class _OtpVerificationState extends State<OtpVerification> {
                         );
                         Get.offNamed(
                           "/home_page",
-                          arguments: data['user'],
                         );
                       } else {
                         Get.snackbar(

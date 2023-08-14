@@ -6,6 +6,8 @@ class FireStoreHelper {
 
   static final FireStoreHelper fireStoreHelper = FireStoreHelper._();
   static final FirebaseFirestore db = FirebaseFirestore.instance;
+  static String? toUid;
+  static String? chatDocId;
 
   Future insertWhileSignIn({required Map<String, dynamic> data}) async {
     DocumentSnapshot<Map<String, dynamic>> docSnapShot =
@@ -31,19 +33,75 @@ class FireStoreHelper {
     return userData;
   }
 
+  Future createDocumentInChatroom() async {
+    QuerySnapshot<Map<String, dynamic>> snapshot =
+        await db.collection("chatroom").get();
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs = snapshot.docs;
+
+    String user1 = FireBaseAuthHelper.currentUser!.uid;
+    String user2 = toUid!;
+
+    List<Map<String, dynamic>> userDetails = [
+      {
+        "first_user": user1,
+      },
+      {
+        "second_user": user2,
+      }
+    ];
+
+    bool documentExists = false;
+
+    for (var element in allDocs) {
+      String docId = element.id;
+      List<String> splitList = docId.split("_");
+      String u1 = splitList[0];
+      String u2 = splitList[1];
+
+      if ((u1 == user1 || u1 == user2) && (u2 == user1 || u2 == user2)) {
+        documentExists = true;
+        chatDocId = element.id;
+        break;
+      }
+    }
+    if (documentExists == false) {
+      chatDocId = "${user1}_$user2";
+      await db
+          .collection("chatroom")
+          .doc(chatDocId)
+          .set({"UserDetails": FieldValue.arrayUnion(userDetails)});
+    }
+  }
+
   Future<void> sendChatMessage(
       {required String id, required String msg}) async {
-    await db.collection("users").doc(id).collection("chat").add({
-      "message": msg,
-      "fromId": FireBaseAuthHelper.currentUser.uid,
-      "timestamp": FieldValue.serverTimestamp(),
+    await db.collection("chatroom").doc(id).collection("chat").add({
+      "msg": msg,
+      "fromUid": FireBaseAuthHelper.currentUser!.uid,
+      "toUid": toUid,
+      "timeStamp": FieldValue.serverTimestamp(),
     });
   }
 
-  Stream displayAllMessages({required String id}) {
-    Stream<QuerySnapshot<Map<String, dynamic>>> userChat =
-        db.collection("users").doc(id).collection("chat").snapshots();
+  Future<Stream> displayAllMessages() async {
+    await createDocumentInChatroom();
+    Stream<QuerySnapshot<Map<String, dynamic>>> userChat = db
+        .collection("chatroom")
+        .doc(chatDocId)
+        .collection("chat")
+        .orderBy("timeStamp", descending: true)
+        .snapshots();
 
     return userChat;
+  }
+
+  Future<void> deleteMessage(
+      {required String chatDocId, required String chatId}) async {
+    await db
+        .collection('chatroom')
+        .doc(chatDocId)
+        .collection('chat')
+        .doc(chatId)
+        .delete();
   }
 }

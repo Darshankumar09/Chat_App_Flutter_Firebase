@@ -16,11 +16,10 @@ class HomePage extends StatefulWidget {
 
 class _HomePageState extends State<HomePage> {
   SignInController signInController = Get.put(SignInController());
+  User? userData = FireBaseAuthHelper.currentUser;
 
   @override
   Widget build(BuildContext context) {
-    User? userData = ModalRoute.of(context)!.settings.arguments as User?;
-
     return Scaffold(
       drawer: Drawer(
         child: Column(
@@ -31,14 +30,14 @@ class _HomePageState extends State<HomePage> {
             CircleAvatar(
               radius: height * 0.09,
               foregroundImage: (userData!.photoURL != null)
-                  ? NetworkImage(userData.photoURL!)
+                  ? NetworkImage(userData!.photoURL!)
                   : const AssetImage("assets/images/user.png")
                       as ImageProvider?,
             ),
             SizedBox(
               height: height * 0.03,
             ),
-            Text("Email : ${userData.email}"),
+            Text("Email : ${userData!.email}"),
             SizedBox(
               height: height * 0.03,
             ),
@@ -67,7 +66,16 @@ class _HomePageState extends State<HomePage> {
           ],
         ),
       ),
-      appBar: AppBar(),
+      appBar: AppBar(
+        actions: [
+          IconButton(
+            onPressed: () async {
+              await FireBaseAuthHelper.fireBaseAuthHelper.deleteUser();
+            },
+            icon: const Icon(Icons.delete),
+          ),
+        ],
+      ),
       body: StreamBuilder(
         stream: FireStoreHelper.fireStoreHelper.displayAllUsers(),
         builder: (context, snapshot) {
@@ -82,28 +90,25 @@ class _HomePageState extends State<HomePage> {
             List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs =
                 data.docs;
 
-            Set<String> uniqueSet = {};
-            List<QueryDocumentSnapshot<Map<String, dynamic>>> uniqueList =
-                allDocs.where((e) => uniqueSet.add(e.data()['uid'])).toList();
-
             List<QueryDocumentSnapshot<Map<String, dynamic>>> documents = [];
-            for (int i = 0; i < uniqueList.length; i++) {
-              if (userData!.uid != uniqueList[i].data()['uid']) {
-                documents.add(uniqueList[i]);
+
+            for (int i = 0; i < allDocs.length; i++) {
+              if (userData!.uid != allDocs[i].data()['uid']) {
+                documents.add(allDocs[i]);
               }
             }
 
             return ListView.builder(
               itemCount: documents.length,
-              itemBuilder: (context, index) => GestureDetector(
-                onTap: () {
+              itemBuilder: (context, index) => ListTile(
+                onTap: () async {
+                  FireStoreHelper.toUid = documents[index].data()['uid'];
+                  allMessages = await FireStoreHelper.fireStoreHelper.displayAllMessages();
                   Get.toNamed("/chat_page", arguments: documents[index]);
                 },
-                child: ListTile(
-                  leading: Text("${index + 1}"),
-                  title: Text(documents[index].data()['email']),
-                  subtitle: Text(documents[index].data()['uid']),
-                ),
+                leading: Text("${index + 1}"),
+                title: Text(documents[index].data()['email']),
+                subtitle: Text(documents[index].data()['uid']),
               ),
             );
           }

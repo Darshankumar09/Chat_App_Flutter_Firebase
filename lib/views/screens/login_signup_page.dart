@@ -147,10 +147,7 @@ class _LoginSignUpPageState extends State<LoginSignUpPage> {
                                 backgroundColor: Colors.green,
                                 snackPosition: SnackPosition.BOTTOM,
                               );
-                              Get.offNamed(
-                                "/home_page",
-                                arguments: data['user'],
-                              );
+                              Get.offNamed("/home_page");
                               signInController.signIn();
                               signInEmailController.clear();
                               signInPasswordController.clear();
@@ -225,7 +222,6 @@ class _LoginSignUpPageState extends State<LoginSignUpPage> {
                               );
                               Get.offNamed(
                                 "/home_page",
-                                arguments: data['user'],
                               );
                               signInController.signIn();
                             } else {
@@ -255,7 +251,6 @@ class _LoginSignUpPageState extends State<LoginSignUpPage> {
                               );
                               Get.offNamed(
                                 "/home_page",
-                                arguments: data['user'],
                               );
                               signInController.signIn();
                             } else {

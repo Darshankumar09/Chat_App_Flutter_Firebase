@@ -1,5 +1,7 @@
 import 'package:chat_app/utils/helpers/firestore_helper.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:get/get.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 class FireBaseAuthHelper {
@@ -8,8 +10,32 @@ class FireBaseAuthHelper {
   static final FireBaseAuthHelper fireBaseAuthHelper = FireBaseAuthHelper._();
   static final FirebaseAuth firebaseAuth = FirebaseAuth.instance;
   static final GoogleSignIn googleSignIn = GoogleSignIn();
-  static final User currentUser = firebaseAuth.currentUser!;
+  static User? currentUser;
+  static final db = FireStoreHelper.db;
   static String verify = "";
+
+  fetchCurrentUser() {
+    currentUser = firebaseAuth.currentUser!;
+  }
+
+  Future<bool> userExists() async {
+    fetchCurrentUser();
+    bool isUserExists = false;
+
+    QuerySnapshot<Map<String, dynamic>> collectionSnapShot =
+        await db.collection("users").get();
+
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> data =
+        collectionSnapShot.docs;
+
+    for (int i = 0; i < data.length; i++) {
+      if (data[i]['uid'] == currentUser!.uid) {
+        isUserExists = true;
+        break;
+      }
+    }
+    return isUserExists;
+  }
 
   Future<Map<String, dynamic>> signInAnonymously() async {
     Map<String, dynamic> data = {};
@@ -32,6 +58,9 @@ class FireBaseAuthHelper {
           data["msg"] = e.code;
       }
     }
+
+    await fetchCurrentUser();
+
     return data;
   }
 
@@ -75,6 +104,7 @@ class FireBaseAuthHelper {
       User? user = userCredential.user;
 
       data['user'] = user;
+      await userExists();
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "invalid-verification-code":
@@ -141,7 +171,11 @@ class FireBaseAuthHelper {
         'fcm-token': fcmToken,
       };
 
-      await FireStoreHelper.fireStoreHelper.insertWhileSignIn(data: userData);
+      bool isUserExists = await userExists();
+
+      if (isUserExists == false) {
+        await FireStoreHelper.fireStoreHelper.insertWhileSignIn(data: userData);
+      }
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "admin-restricted-operation":
@@ -193,7 +227,11 @@ class FireBaseAuthHelper {
         'fcm-token': fcmToken,
       };
 
-      await FireStoreHelper.fireStoreHelper.insertWhileSignIn(data: userData);
+      bool isUserExists = await userExists();
+
+      if (isUserExists == false) {
+        await FireStoreHelper.fireStoreHelper.insertWhileSignIn(data: userData);
+      }
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "admin-restricted-operation":
@@ -215,5 +253,29 @@ class FireBaseAuthHelper {
   Future<void> signOut() async {
     await firebaseAuth.signOut();
     await googleSignIn.signOut();
+  }
+
+  Future deleteUser() async {
+    QuerySnapshot<Map<String, dynamic>> collectionSnapShot =
+        await db.collection("users").get();
+
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> data =
+        collectionSnapShot.docs;
+
+    for (int i = 0; i < data.length; i++) {
+      if (data[i]['uid'] == currentUser!.uid) {
+        db.collection("users").doc(data[i].id).delete();
+      }
+    }
+    DocumentSnapshot<Map<String, dynamic>> docSnapShot =
+        await db.collection("records").doc("users").get();
+
+    Map<String, dynamic> res = docSnapShot.data() as Map<String, dynamic>;
+
+    int length = res['length'];
+
+    await db.collection("records").doc("users").update({'length': --length});
+    await currentUser!.delete();
+    Get.offAndToNamed("/login_page");
   }
 }
