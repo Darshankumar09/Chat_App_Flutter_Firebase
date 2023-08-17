@@ -33,88 +33,71 @@ class FireStoreHelper {
     return userData;
   }
 
-  Future<void> deleteMessageForMe({required String chatDocId}) async {
+  Future<void> deleteMessageForMe({required String chatId}) async {
     String user1 = FireBaseAuthHelper.currentUser!.uid;
     String user2 = toUid!;
 
     await db
         .collection('chatroom')
-        .doc(user1)
-        .collection("${user1}_$user2")
         .doc(chatDocId)
+        .collection("messages")
+        .doc(chatId)
         .delete();
   }
 
-  Future<void> deleteMessageForEveryone({required String chatDocId}) async {
+  Future<void> deleteMessageForEveryone({required String chatId}) async {
     String user1 = FireBaseAuthHelper.currentUser!.uid;
     String user2 = toUid!;
 
     await db
         .collection('chatroom')
-        .doc(user1)
-        .collection("${user1}_$user2")
         .doc(chatDocId)
-        .delete();
-
-    await db
-        .collection('chatroom')
-        .doc(user2)
-        .collection("${user2}_$user1")
-        .doc(chatDocId)
+        .collection("messages")
+        .doc(chatId)
         .delete();
   }
 
-  Future<int> sendMessageId() async {
-    String user1 = FireBaseAuthHelper.currentUser!.uid;
-    String user2 = toUid!;
-    int msgId = 1;
+  Future<void> createChatDocument() async {
+    String uid1 = FireBaseAuthHelper.currentUser!.uid;
+    String uid2 = toUid!;
 
-    DocumentSnapshot<Map<String, dynamic>> chatRecords = await db
-        .collection("chat_records")
-        .doc(user1)
-        .collection("${user1}_$user2")
-        .doc("records")
-        .get();
+    String user1 = "${uid1}_$uid2";
+    String user2 = "${uid2}_$uid1";
+    bool chatDocExists = false;
 
-    Map<String, dynamic>? records = chatRecords.data();
+    QuerySnapshot<Map<String, dynamic>> snapshot =
+        await db.collection("chatroom").get();
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> chatDocList =
+        snapshot.docs;
 
-    if (records == null) {
-      await db
-          .collection("chat_records")
-          .doc(user1)
-          .collection("${user1}_$user2")
-          .doc("records")
-          .set({"msgId": msgId});
+    if (chatDocList.isNotEmpty) {
+      for (var element in chatDocList) {
+        if (element.id == user1 || element.id == user2) {
+          chatDocExists = true;
+          chatDocId = element.id;
+          break;
+        } else {
+          chatDocId = user1;
+        }
+      }
 
-      await db
-          .collection("chat_records")
-          .doc(user2)
-          .collection("${user2}_$user1")
-          .doc("records")
-          .set({"msgId": msgId});
+      if (chatDocExists == false) {
+        await db.collection("chatroom").doc(user1).set({
+          "users": [uid1, uid2]
+        });
+      }
     } else {
-      msgId = records['msgId'];
-      await db
-          .collection("chat_records")
-          .doc(user1)
-          .collection("${user1}_$user2")
-          .doc("records")
-          .update({"msgId": ++msgId});
+      chatDocId = user1;
 
-      await db
-          .collection("chat_records")
-          .doc(user2)
-          .collection("${user2}_$user1")
-          .doc("records")
-          .update({"msgId": msgId});
+      await db.collection("chatroom").doc(user1).set({
+        "users": [uid1, uid2]
+      });
     }
-    return msgId;
   }
 
   Future<void> sendMessage({required String msg}) async {
     String user1 = FireBaseAuthHelper.currentUser!.uid;
     String user2 = toUid!;
-    // int msgId = await sendMessageId();
     final FieldValue timeStamp = FieldValue.serverTimestamp();
 
     Map<String, dynamic> msgMap = {
@@ -126,20 +109,21 @@ class FireStoreHelper {
 
     await db
         .collection("chatroom")
-        .doc(user1)
-        .collection("${user1}_$user2")
+        .doc(chatDocId)
+        .collection("messages")
         .add({user1: msgMap, user2: msgMap});
   }
 
   Future<Stream> displayAllMessages() async {
+    await createChatDocument();
+
     String user1 = FireBaseAuthHelper.currentUser!.uid;
     String user2 = toUid!;
 
     Stream<QuerySnapshot<Map<String, dynamic>>> userChat = db
         .collection("chatroom")
-        .doc(user1)
-        .collection("${user1}_$user2")
-        .orderBy("timeStamp", descending: true)
+        .doc(chatDocId)
+        .collection("messages")
         .snapshots();
 
     return userChat;

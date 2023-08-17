@@ -103,8 +103,9 @@ class _HomePageState extends State<HomePage> {
               itemBuilder: (context, index) => ListTile(
                 onTap: () async {
                   FireStoreHelper.toUid = documents[index].data()['uid'];
-                  allMessages = await FireStoreHelper.fireStoreHelper.displayAllMessages();
-                  Get.toNamed("/chat_page", arguments: documents[index]);
+                  allMessages = await FireStoreHelper.fireStoreHelper
+                      .displayAllMessages();
+                  Get.toNamed("/chat_page");
                 },
                 leading: Text("${index + 1}"),
                 title: Text(documents[index].data()['email']),

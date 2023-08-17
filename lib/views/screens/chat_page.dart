@@ -15,6 +15,8 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   TextEditingController chatController = TextEditingController();
+  String user1 = FireBaseAuthHelper.firebaseAuth.currentUser!.uid;
+  String user2 = FireStoreHelper.toUid!;
 
   @override
   Widget build(BuildContext context) {
@@ -48,7 +50,7 @@ class _ChatPageState extends State<ChatPage> {
                             itemCount: allMessages.length,
                             itemBuilder: (context, index) {
                               DateTime timeStampFromDb = (allMessages[index]
-                                          ['timeStamp'] ??
+                                          [user1]['timeStamp'] ??
                                       Timestamp.fromDate(DateTime.now()))
                                   .toDate();
 
@@ -58,18 +60,18 @@ class _ChatPageState extends State<ChatPage> {
                               String formattedTimeStamp =
                                   DateFormat('hh:mm a').format(timeStamp);
 
-                              if (allMessages[index]['fromUid'] ==
+                              if (allMessages[index][user1]['fromUid'] ==
                                   FireBaseAuthHelper.currentUser!.uid) {
                                 return sendMessage(
                                   context: context,
-                                  data: allMessages[index],
+                                  data: allMessages[index][user1],
                                   chatDocId: allMessages[index].id,
                                   formattedTimeStamp: formattedTimeStamp,
                                 );
                               } else {
                                 return receivedMessage(
                                   context: context,
-                                  data: allMessages[index],
+                                  data: allMessages[index][user2],
                                   chatDocId: allMessages[index].id,
                                   formattedTimeStamp: formattedTimeStamp,
                                 );
@@ -154,7 +156,7 @@ Widget sendMessage({
                       Get.back();
                       await FireStoreHelper.fireStoreHelper
                           .deleteMessageForEveryone(
-                        chatDocId: chatDocId,
+                        chatId: chatDocId,
                       );
                     },
                     child: Text(
@@ -170,7 +172,7 @@ Widget sendMessage({
                     onPressed: () async {
                       Get.back();
                       await FireStoreHelper.fireStoreHelper.deleteMessageForMe(
-                        chatDocId: chatDocId,
+                        chatId: chatDocId,
                       );
                     },
                     child: Text(
@@ -295,7 +297,7 @@ Widget receivedMessage({
                     onPressed: () async {
                       Get.back();
                       await FireStoreHelper.fireStoreHelper.deleteMessageForMe(
-                        chatDocId: chatDocId,
+                        chatId: chatDocId,
                       );
                     },
                     child: Text(
