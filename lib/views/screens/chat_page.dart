@@ -1,10 +1,15 @@
+import 'dart:developer';
+
 import 'package:chat_app/utils/globals.dart';
-import 'package:chat_app/utils/helpers/firebase_auth_helper.dart';
-import 'package:chat_app/utils/helpers/firestore_helper.dart';
+import 'package:chat_app/helpers/firebase_auth_helper.dart';
+import 'package:chat_app/helpers/firestore_helper.dart';
+import 'package:chat_bubbles/chat_bubbles.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:get/get.dart';
 import 'package:intl/intl.dart';
+import 'package:swipe_to/swipe_to.dart';
 
 class ChatPage extends StatefulWidget {
   const ChatPage({super.key});
@@ -15,75 +20,112 @@ class ChatPage extends StatefulWidget {
 
 class _ChatPageState extends State<ChatPage> {
   TextEditingController chatController = TextEditingController();
+
   String user1 = FireBaseAuthHelper.firebaseAuth.currentUser!.uid;
-  String user2 = FireStoreHelper.toUid!;
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(),
+      appBar: AppBar(
+        title: StreamBuilder(
+          stream: FireStoreHelper.fireStoreHelper.connectionStatus(),
+          builder: (context, snapshot) {
+            if (snapshot.hasData) {
+              DocumentSnapshot<Map<String, dynamic>>? data = snapshot.data;
+              Map<String, dynamic>? nextUserData = data!.data();
+
+              if (nextUserData != null) {
+                return Text(
+                  (nextUserData['isOnline'] ?? false) ? "Online" : "",
+                  style: const TextStyle(
+                    fontSize: 14,
+                    color: Colors.black,
+                  ),
+                );
+              } else {
+                return const Text("");
+              }
+            }
+            return const Text("");
+          },
+        ),
+      ),
       body: Column(
         children: [
           Expanded(
             flex: 6,
-            child: SizedBox(
-              child: StreamBuilder(
-                stream: allMessages,
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(
-                      child: Text("Error : ${snapshot.error}"),
-                    );
-                  } else if (snapshot.hasData) {
-                    QuerySnapshot<Map<String, dynamic>> data = snapshot.data;
-
-                    List<QueryDocumentSnapshot<Map<String, dynamic>>>
-                        allMessages = data.docs;
-
-                    return (allMessages.isEmpty)
-                        ? const Center(
-                            child: Text("No Message available..."),
-                          )
-                        : ListView.builder(
-                            physics: const BouncingScrollPhysics(),
-                            reverse: true,
-                            itemCount: allMessages.length,
-                            itemBuilder: (context, index) {
-                              DateTime timeStampFromDb = (allMessages[index]
-                                          [user1]['timeStamp'] ??
-                                      Timestamp.fromDate(DateTime.now()))
-                                  .toDate();
-
-                              DateTime timeStamp =
-                                  DateFormat('dd/MM/yyyy, HH:mm').parse(
-                                      '${timeStampFromDb.day}/${timeStampFromDb.month}/${timeStampFromDb.year}, ${timeStampFromDb.hour}:${timeStampFromDb.minute}');
-                              String formattedTimeStamp =
-                                  DateFormat('hh:mm a').format(timeStamp);
-
-                              if (allMessages[index][user1]['fromUid'] ==
-                                  FireBaseAuthHelper.currentUser!.uid) {
-                                return sendMessage(
-                                  context: context,
-                                  data: allMessages[index][user1],
-                                  chatDocId: allMessages[index].id,
-                                  formattedTimeStamp: formattedTimeStamp,
-                                );
-                              } else {
-                                return receivedMessage(
-                                  context: context,
-                                  data: allMessages[index][user2],
-                                  chatDocId: allMessages[index].id,
-                                  formattedTimeStamp: formattedTimeStamp,
-                                );
-                              }
-                            },
-                          );
-                  }
-                  return const Center(
-                    child: CircularProgressIndicator(),
+            child: StreamBuilder(
+              stream: allMessages,
+              builder: (context, snapshot) {
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Text("Error : ${snapshot.error}"),
                   );
-                },
-              ),
+                } else if (snapshot.hasData) {
+                  QuerySnapshot<Map<String, dynamic>> ss = snapshot.data;
+
+                  List<QueryDocumentSnapshot<Map<String, dynamic>>> allDocs =
+                      ss.docs;
+
+                  List<QueryDocumentSnapshot<Map<String, dynamic>>>
+                      allMessages = [];
+
+                  for (var element in allDocs) {
+                    if (element.data()[user1] == true) {
+                      allMessages.add(element);
+                    }
+                  }
+
+                  return (allMessages.isEmpty)
+                      ? const Center(
+                          child: Text("No Message available..."),
+                        )
+                      : ListView.builder(
+                          physics: const BouncingScrollPhysics(),
+                          reverse: true,
+                          itemCount: allMessages.length,
+                          itemBuilder: (context, index) {
+                            DateTime timeStampFromDb = (allMessages[index]
+                                        ['timeStamp'] ??
+                                    Timestamp.fromDate(DateTime.now()))
+                                .toDate();
+
+                            DateTime timeStamp = DateFormat('dd/MM/yyyy, HH:mm')
+                                .parse(
+                                    '${timeStampFromDb.day}/${timeStampFromDb.month}/${timeStampFromDb.year}, ${timeStampFromDb.hour}:${timeStampFromDb.minute}');
+                            String formattedTimeStamp =
+                                DateFormat('hh:mm a').format(timeStamp);
+
+                            if (allMessages[index]['fromUid'] ==
+                                FireBaseAuthHelper.currentUser!.uid) {
+                              return SwipeTo(
+                                onRightSwipe: () {
+                                  log("swipe");
+                                },
+                                iconOnRightSwipe: const IconData(
+                                  0xe528,
+                                  fontFamily: 'MaterialIcons',
+                                ),
+                                child: sendMessage(
+                                  context: context,
+                                  data: allMessages[index],
+                                  formattedTimeStamp: formattedTimeStamp,
+                                ),
+                              );
+                            } else {
+                              return receivedMessage(
+                                context: context,
+                                data: allMessages[index],
+                                formattedTimeStamp: formattedTimeStamp,
+                              );
+                            }
+                          },
+                        );
+                }
+                return const Center(
+                  child: CircularProgressIndicator(),
+                );
+              },
             ),
           ),
           Expanded(
@@ -95,6 +137,7 @@ class _ChatPageState extends State<ChatPage> {
                   Expanded(
                     child: TextField(
                       controller: chatController,
+                      keyboardType: TextInputType.multiline,
                       decoration: const InputDecoration(
                         hintText: "Enter message..",
                         border: OutlineInputBorder(),
@@ -107,11 +150,13 @@ class _ChatPageState extends State<ChatPage> {
                   FloatingActionButton(
                     onPressed: () async {
                       String msg = chatController.text;
+
                       if (msg.isNotEmpty) {
                         chatController.clear();
                         await FireStoreHelper.fireStoreHelper
                             .sendMessage(msg: msg);
                       }
+                      chatController.clear();
                     },
                     child: const Icon(Icons.send),
                   )
@@ -127,7 +172,6 @@ class _ChatPageState extends State<ChatPage> {
 
 Widget sendMessage({
   required data,
-  required String chatDocId,
   required String formattedTimeStamp,
   required BuildContext context,
 }) {
@@ -156,7 +200,7 @@ Widget sendMessage({
                       Get.back();
                       await FireStoreHelper.fireStoreHelper
                           .deleteMessageForEveryone(
-                        chatId: chatDocId,
+                        chatId: data.id,
                       );
                     },
                     child: Text(
@@ -172,7 +216,7 @@ Widget sendMessage({
                     onPressed: () async {
                       Get.back();
                       await FireStoreHelper.fireStoreHelper.deleteMessageForMe(
-                        chatId: chatDocId,
+                        chatId: data.id,
                       );
                     },
                     child: Text(
@@ -204,72 +248,18 @@ Widget sendMessage({
         },
       );
     },
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.end,
-      children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: width * 0.85,
-            minHeight: height * 0.045,
-          ),
-          child: Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(height * 0.01),
-            ),
-            color: const Color(0xff108654),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: 8,
-                    right: 80,
-                    top: 4,
-                    bottom: 4,
-                  ),
-                  child: Text(
-                    data['msg'],
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 5,
-                  child: Row(
-                    children: [
-                      Text(
-                        formattedTimeStamp,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade300,
-                        ),
-                      ),
-                      const SizedBox(
-                        width: 2,
-                      ),
-                      const Icon(
-                        Icons.done_all,
-                        size: 14,
-                        color: Color(0xff00d4ff),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    child: BubbleSpecialThree(
+      text: data['msg'],
+      color: const Color(0xff108654),
+      tail: false,
+      isSender: true,
+      textStyle: const TextStyle(color: Colors.white, fontSize: 16),
     ),
   );
 }
 
 Widget receivedMessage({
   required data,
-  required String chatDocId,
   required String formattedTimeStamp,
   required BuildContext context,
 }) {
@@ -297,7 +287,7 @@ Widget receivedMessage({
                     onPressed: () async {
                       Get.back();
                       await FireStoreHelper.fireStoreHelper.deleteMessageForMe(
-                        chatId: chatDocId,
+                        chatId: data.id,
                       );
                     },
                     child: Text(
@@ -329,57 +319,12 @@ Widget receivedMessage({
         },
       );
     },
-    child: Row(
-      mainAxisAlignment: MainAxisAlignment.start,
-      children: [
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: width * 0.85,
-            minHeight: height * 0.045,
-          ),
-          child: Card(
-            elevation: 1,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(height * 0.01),
-            ),
-            color: Colors.black.withOpacity(0.6),
-            child: Stack(
-              children: [
-                Padding(
-                  padding: const EdgeInsets.only(
-                    left: 8,
-                    right: 66,
-                    top: 4,
-                    bottom: 4,
-                  ),
-                  child: Text(
-                    data['msg'],
-                    style: const TextStyle(
-                      fontSize: 16,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-                Positioned(
-                  bottom: 0,
-                  right: 5,
-                  child: Row(
-                    children: [
-                      Text(
-                        formattedTimeStamp,
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.grey.shade300,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ],
+    child: BubbleSpecialThree(
+      text: data['msg'],
+      color: Colors.black.withOpacity(0.6),
+      tail: false,
+      isSender: false,
+      textStyle: const TextStyle(color: Colors.white, fontSize: 16),
     ),
   );
 }

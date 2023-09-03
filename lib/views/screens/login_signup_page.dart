@@ -1,7 +1,7 @@
 import 'package:chat_app/controllers/signIn_controller.dart';
 import 'package:chat_app/utils/globals.dart';
-import 'package:chat_app/utils/helpers/fcm_helper.dart';
-import 'package:chat_app/utils/helpers/firebase_auth_helper.dart';
+import 'package:chat_app/helpers/fcm_helper.dart';
+import 'package:chat_app/helpers/firebase_auth_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 

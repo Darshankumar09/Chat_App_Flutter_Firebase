@@ -1,4 +1,5 @@
-import 'package:chat_app/utils/helpers/firestore_helper.dart';
+import 'package:chat_app/helpers/firestore_helper.dart';
+import 'package:chat_app/utils/globals.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:get/get.dart';
@@ -13,6 +14,7 @@ class FireBaseAuthHelper {
   static User? currentUser;
   static final db = FireStoreHelper.db;
   static String verify = "";
+  static String? userDocumentId;
 
   fetchCurrentUser() {
     currentUser = firebaseAuth.currentUser!;
@@ -35,6 +37,21 @@ class FireBaseAuthHelper {
       }
     }
     return isUserExists;
+  }
+
+  Future userDocId() async {
+    QuerySnapshot<Map<String, dynamic>> collectionSnapShot =
+        await db.collection("users").get();
+
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> data =
+        collectionSnapShot.docs;
+
+    for (var element in data) {
+      if (element['uid'] == currentUser!.uid) {
+        userDocumentId = element.id;
+        break;
+      }
+    }
   }
 
   Future<Map<String, dynamic>> signInAnonymously() async {
@@ -60,6 +77,10 @@ class FireBaseAuthHelper {
     }
 
     await fetchCurrentUser();
+
+    await userDocId();
+
+    getStorage.write("userDocId", userDocumentId);
 
     return data;
   }
@@ -105,6 +126,10 @@ class FireBaseAuthHelper {
 
       data['user'] = user;
       await userExists();
+
+      await userDocId();
+
+      getStorage.write("userDocId", userDocumentId);
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "invalid-verification-code":
@@ -169,6 +194,7 @@ class FireBaseAuthHelper {
         'email': user!.email,
         'uid': user.uid,
         'fcm-token': fcmToken,
+        'isOnline': true,
       };
 
       bool isUserExists = await userExists();
@@ -176,6 +202,9 @@ class FireBaseAuthHelper {
       if (isUserExists == false) {
         await FireStoreHelper.fireStoreHelper.insertWhileSignIn(data: userData);
       }
+      await userDocId();
+
+      getStorage.write("userDocId", userDocumentId);
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "admin-restricted-operation":
@@ -225,6 +254,7 @@ class FireBaseAuthHelper {
         'email': user!.email,
         'uid': user.uid,
         'fcm-token': fcmToken,
+        'isOnline': true,
       };
 
       bool isUserExists = await userExists();
@@ -232,6 +262,10 @@ class FireBaseAuthHelper {
       if (isUserExists == false) {
         await FireStoreHelper.fireStoreHelper.insertWhileSignIn(data: userData);
       }
+
+      await userDocId();
+
+      getStorage.write("userDocId", userDocumentId);
     } on FirebaseAuthException catch (e) {
       switch (e.code) {
         case "admin-restricted-operation":
@@ -251,22 +285,28 @@ class FireBaseAuthHelper {
   }
 
   Future<void> signOut() async {
+    await FireStoreHelper.fireStoreHelper.updateUserConnectivity(
+      userDocId: getStorage.read("userDocId"),
+      status: false,
+    );
     await firebaseAuth.signOut();
     await googleSignIn.signOut();
   }
 
   Future deleteUser() async {
+    String uid1 = currentUser!.uid;
+    await currentUser!.delete();
+    Get.offAndToNamed("/login_page");
+
     QuerySnapshot<Map<String, dynamic>> collectionSnapShot =
         await db.collection("users").get();
 
-    List<QueryDocumentSnapshot<Map<String, dynamic>>> data =
-        collectionSnapShot.docs;
-
-    for (int i = 0; i < data.length; i++) {
-      if (data[i]['uid'] == currentUser!.uid) {
-        db.collection("users").doc(data[i].id).delete();
+    for (var element in collectionSnapShot.docs) {
+      if (element.data()['uid'] == uid1) {
+        db.collection("users").doc(element.id).delete();
       }
     }
+
     DocumentSnapshot<Map<String, dynamic>> docSnapShot =
         await db.collection("records").doc("users").get();
 
@@ -275,7 +315,62 @@ class FireBaseAuthHelper {
     int length = res['length'];
 
     await db.collection("records").doc("users").update({'length': --length});
-    await currentUser!.delete();
-    Get.offAndToNamed("/login_page");
+
+    QuerySnapshot<Map<String, dynamic>> snapshot =
+        await db.collection("chatroom").get();
+    List<QueryDocumentSnapshot<Map<String, dynamic>>> chatDocList =
+        snapshot.docs;
+
+    if (chatDocList.isNotEmpty) {
+      for (var element in chatDocList) {
+        String user1 = element.id.split("_")[0];
+        String user2 = element.id.split("_")[1];
+        String uid2;
+
+        if (user1 == uid1) {
+          uid2 = user2;
+        } else {
+          uid2 = user1;
+        }
+
+        if (user1 == uid1 || user2 == uid1) {
+          QuerySnapshot<Map<String, dynamic>> messages = await db
+              .collection("chatroom")
+              .doc(element.id)
+              .collection("messages")
+              .get();
+
+          List<QueryDocumentSnapshot<Map<String, dynamic>>> messagesDocList =
+              messages.docs;
+
+          if (messagesDocList.isNotEmpty) {
+            for (var doc in messagesDocList) {
+              final batch = FireStoreHelper.db.batch();
+              if (doc.data()[uid2] == false) {
+                batch.delete(doc.reference);
+              } else if (doc.data()[uid1] == true) {
+                batch.update(doc.reference, {uid1: false});
+              }
+              await batch.commit();
+            }
+          }
+        }
+
+        if (user1 == uid1 || user2 == uid1) {
+          QuerySnapshot<Map<String, dynamic>> messages = await db
+              .collection("chatroom")
+              .doc(element.id)
+              .collection("messages")
+              .get();
+
+          List<QueryDocumentSnapshot<Map<String, dynamic>>> messagesDocList =
+              messages.docs;
+
+          if (messagesDocList.isEmpty) {
+            await db.collection("chatroom").doc(element.id).delete();
+          }
+        }
+      }
+    }
   }
 }

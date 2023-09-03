@@ -1,7 +1,8 @@
+import 'package:chat_app/controllers/chat_delete_controller.dart';
 import 'package:chat_app/controllers/signIn_controller.dart';
+import 'package:chat_app/helpers/firebase_auth_helper.dart';
+import 'package:chat_app/helpers/firestore_helper.dart';
 import 'package:chat_app/utils/globals.dart';
-import 'package:chat_app/utils/helpers/firebase_auth_helper.dart';
-import 'package:chat_app/utils/helpers/firestore_helper.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
@@ -14,9 +15,42 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  SignInController signInController = Get.put(SignInController());
+class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
+  SignInController signInController = Get.find<SignInController>();
+
+  ChatDeleteController chatDeleteController = Get.put(ChatDeleteController());
   User? userData = FireBaseAuthHelper.currentUser;
+  String? userDocId = getStorage.read("userDocId");
+
+  @override
+  void initState() {
+    super.initState();
+    FireStoreHelper.fireStoreHelper.updateUserConnectivity(
+      userDocId: userDocId,
+      status: true,
+    );
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    super.didChangeAppLifecycleState(state);
+    if (state == AppLifecycleState.resumed) {
+      FireStoreHelper.fireStoreHelper.updateUserConnectivity(
+        userDocId: userDocId,
+        status: true,
+      );
+    }
+    if (state == AppLifecycleState.inactive ||
+        state == AppLifecycleState.hidden ||
+        state == AppLifecycleState.paused ||
+        state == AppLifecycleState.detached) {
+      FireStoreHelper.fireStoreHelper.updateUserConnectivity(
+        userDocId: userDocId,
+        status: false,
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -101,11 +135,20 @@ class _HomePageState extends State<HomePage> {
             return ListView.builder(
               itemCount: documents.length,
               itemBuilder: (context, index) => ListTile(
+                onLongPress: () {
+                  FireStoreHelper.toUid = documents[index].data()['uid'];
+                  chatDeleteController.chatDeleteModel.alsoDelete = false;
+                  chatDeleteDialog(
+                    context: context,
+                    chatDeleteController: chatDeleteController,
+                  );
+                },
                 onTap: () async {
                   FireStoreHelper.toUid = documents[index].data()['uid'];
                   allMessages = await FireStoreHelper.fireStoreHelper
                       .displayAllMessages();
                   Get.toNamed("/chat_page");
+                  await FireStoreHelper.fireStoreHelper.nextUserDocId();
                 },
                 leading: Text("${index + 1}"),
                 title: Text(documents[index].data()['email']),
@@ -120,4 +163,78 @@ class _HomePageState extends State<HomePage> {
       ),
     );
   }
+}
+
+chatDeleteDialog({
+  required BuildContext context,
+  required ChatDeleteController chatDeleteController,
+}) {
+  return showDialog(
+    context: context,
+    builder: (context) {
+      return AlertDialog(
+        title: const Text("Delete chat"),
+        titleTextStyle: TextStyle(
+          color: const Color(0xff686868),
+          fontSize: height * 0.018,
+        ),
+        elevation: 0,
+        actionsPadding: EdgeInsets.all(height * 0.01),
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(height * 0.02),
+        ),
+        content: Row(
+          children: [
+            GetBuilder<ChatDeleteController>(builder: (context) {
+              return Checkbox(
+                  value: chatDeleteController.chatDeleteModel.alsoDelete,
+                  onChanged: (val) {
+                    chatDeleteController.alsoDelete(val: val!);
+                  });
+            }),
+            Text(
+              "Also delete for opposite user?",
+              style: TextStyle(
+                fontSize: height * 0.016,
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              if (chatDeleteController.chatDeleteModel.alsoDelete) {
+                Get.back();
+                await FireStoreHelper.fireStoreHelper.deleteChatForBoth();
+              } else {
+                Get.back();
+                await FireStoreHelper.fireStoreHelper.deleteChatForMe();
+              }
+            },
+            child: Text(
+              "Delete chat",
+              style: TextStyle(
+                fontSize: height * 0.016,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xffd10000),
+              ),
+            ),
+          ),
+          TextButton(
+            onPressed: () {
+              Get.back();
+            },
+            child: Text(
+              "Cancel",
+              style: TextStyle(
+                fontSize: height * 0.016,
+                fontWeight: FontWeight.w500,
+                color: const Color(0xff108654),
+              ),
+            ),
+          ),
+        ],
+      );
+    },
+  );
 }

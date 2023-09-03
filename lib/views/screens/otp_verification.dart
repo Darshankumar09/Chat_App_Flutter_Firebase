@@ -1,4 +1,4 @@
-import 'package:chat_app/utils/helpers/firebase_auth_helper.dart';
+import 'package:chat_app/helpers/firebase_auth_helper.dart';
 import 'package:flutter/material.dart';
 import 'package:get/get.dart';
 import 'package:pinput/pinput.dart';

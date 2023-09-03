@@ -45,6 +45,9 @@ dependencies:
   get_storage:
   pinput:
   intl:
+  connectivity_plus:
+  chat_bubbles:
+  swipe_to:
 
 dev_dependencies:
   flutter_test:
